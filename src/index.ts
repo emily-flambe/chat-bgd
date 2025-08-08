@@ -34,19 +34,15 @@ export default {
       try {
         console.log('🔍 Healthcheck: Testing AI service from backend...');
         
-        // Detect if we're running in local dev mode - check multiple indicators
-        const origin = request.headers.get('origin') || '';
-        const userAgent = request.headers.get('user-agent') || '';
-        const isLocalDev = url.port === '8787' || url.port === '8788' || 
-                          origin.includes('127.0.0.1') || origin.includes('localhost') ||
-                          url.hostname === '127.0.0.1' || url.hostname === 'localhost' ||
-                          request.url.includes('127.0.0.1') || request.url.includes(':8787') || request.url.includes(':8788');
+        // Use CF connecting IP to detect local dev (wrangler dev shows 127.0.0.1)
+        const cfConnectingIp = request.headers.get('cf-connecting-ip');
+        const isLocalDev = cfConnectingIp === '127.0.0.1';
                           
         console.log('🔍 Healthcheck: Environment detection:', {
-          'url.port': url.port,
+          'env.ENVIRONMENT': env.ENVIRONMENT,
+          'cf-connecting-ip': cfConnectingIp,
           'url.hostname': url.hostname,
           'request.url': request.url,
-          origin,
           isLocalDev
         });
         
@@ -244,18 +240,15 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'
     });
     
-    // Detect environment and choose appropriate method - check multiple indicators
-    const origin = request.headers.get('origin') || '';
-    const isLocalDev = requestUrl.port === '8787' || requestUrl.port === '8788' || 
-                      origin.includes('127.0.0.1') || origin.includes('localhost') ||
-                      requestUrl.hostname === '127.0.0.1' || requestUrl.hostname === 'localhost' ||
-                      request.url.includes('127.0.0.1') || request.url.includes(':8787') || request.url.includes(':8788');
+    // Use CF connecting IP to detect local dev (wrangler dev shows 127.0.0.1)
+    const cfConnectingIp = request.headers.get('cf-connecting-ip');
+    const isLocalDev = cfConnectingIp === '127.0.0.1';
                       
     console.log('🔍 Backend: Environment detection:', {
-      'requestUrl.port': requestUrl.port,
+      'env.ENVIRONMENT': env.ENVIRONMENT,
+      'cf-connecting-ip': cfConnectingIp,
       'requestUrl.hostname': requestUrl.hostname,
       'request.url': request.url,
-      origin,
       isLocalDev
     });
     
