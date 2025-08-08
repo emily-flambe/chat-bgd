@@ -6,8 +6,6 @@
 import { staticAssets } from './lib/static';
 
 export interface Env {
-  CLOUDFLARE_AI_WORKER_API_TOKEN: string;
-  TEST_SECRET: string;
   ANALYTICS?: KVNamespace;
 }
 
@@ -16,12 +14,17 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Debug: Check if we can access secrets on custom domain
-    if (request.url.includes('chat.emilycogsdill.com')) {
-      console.log('🔍 Custom Domain Debug:', {
-        domain: 'chat.emilycogsdill.com',
-        hasToken: !!env.CLOUDFLARE_AI_WORKER_API_TOKEN,
-        tokenExists: env.CLOUDFLARE_AI_WORKER_API_TOKEN ? 'YES' : 'NO'
+    // Debug endpoint to check environment access
+    if (path === '/debug' && request.method === 'GET') {
+      return new Response(JSON.stringify({
+        domain: url.hostname,
+        allEnvKeys: Object.keys(env || {}),
+        timestamp: new Date().toISOString()
+      }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       });
     }
 
@@ -81,23 +84,15 @@ export default {
  */
 async function handleChatRequest(request: Request, env: Env): Promise<Response> {
   try {
-    // Check if API token is configured
-    if (!env.CLOUDFLARE_AI_WORKER_API_TOKEN) {
-      return new Response(
-        JSON.stringify({ error: 'Server configuration error: API token not configured' }),
-        {
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-        }
-      );
-    }
+    const requestUrl = new URL(request.url);
+    console.log('🔍 Chat Request Debug:', {
+      domain: requestUrl.hostname,
+      timestamp: new Date().toISOString()
+    });
 
     // Parse the request body
     const body = await request.json();
-    const { message, systemPrompt } = body;
+    const { message } = body;
 
     // Validate the message
     if (!message || typeof message !== 'string') {
@@ -126,26 +121,35 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
       );
     }
 
-    // Proxy the request to the AI worker
-    const aiResponse = await fetch('https://ai.emilycogsdill.com/api/v1/chat', {
+    // Call the new AI API endpoint
+    console.log('🔍 Making AI service call:', {
+      domain: requestUrl.hostname,
+      url: 'https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat'
+    });
+    
+    const aiResponse = await fetch('https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${env.CLOUDFLARE_AI_WORKER_API_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        message,
-        systemPrompt,
+        input: message,
+        model: '@cf/openai/gpt-oss-20b'
       }),
+    });
+
+    console.log('🔍 AI service response:', {
+      domain: requestUrl.hostname,
+      status: aiResponse.status,
+      statusText: aiResponse.statusText,
+      ok: aiResponse.ok
     });
 
     // Handle AI worker response
     if (!aiResponse.ok) {
       let errorMessage = 'AI service temporarily unavailable';
       
-      if (aiResponse.status === 401) {
-        errorMessage = 'Authentication failed with AI service';
-      } else if (aiResponse.status === 429) {
+      if (aiResponse.status === 429) {
         errorMessage = 'Too many requests. Please wait a moment.';
       } else if (aiResponse.status >= 500) {
         errorMessage = 'AI service error. Please try again later.';
@@ -165,7 +169,23 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
 
     // Forward the AI response
     const aiData = await aiResponse.json();
-    return new Response(JSON.stringify(aiData), {
+    
+    // Extract the actual text response from the complex structure
+    let responseText = 'No response received';
+    if (aiData.output && Array.isArray(aiData.output)) {
+      // Look for the assistant message in the output array
+      const assistantMessage = aiData.output.find(item => 
+        item.type === 'message' && item.role === 'assistant'
+      );
+      if (assistantMessage && assistantMessage.content && Array.isArray(assistantMessage.content)) {
+        const textContent = assistantMessage.content.find(content => content.type === 'output_text');
+        if (textContent && textContent.text) {
+          responseText = textContent.text;
+        }
+      }
+    }
+    
+    return new Response(JSON.stringify({ response: responseText }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
