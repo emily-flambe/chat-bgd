@@ -85,17 +85,26 @@ export default {
 async function handleChatRequest(request: Request, env: Env): Promise<Response> {
   try {
     const requestUrl = new URL(request.url);
-    console.log('🔍 Chat Request Debug:', {
+    console.log('🔍 Backend: Chat Request Started:', {
       domain: requestUrl.hostname,
+      method: request.method,
+      url: request.url,
       timestamp: new Date().toISOString()
     });
 
+    console.log('🔍 Backend: Reading request headers:', Object.fromEntries(request.headers.entries()));
+
     // Parse the request body
+    console.log('🔍 Backend: Parsing request body...');
     const body = await request.json();
+    console.log('🔍 Backend: Parsed request body:', body);
+    
     const { message } = body;
+    console.log('🔍 Backend: Extracted message:', message);
 
     // Validate the message
     if (!message || typeof message !== 'string') {
+      console.log('🚨 Backend: Invalid message format');
       return new Response(
         JSON.stringify({ error: 'Invalid request: message is required' }),
         {
@@ -109,6 +118,7 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
     }
 
     if (message.length > 4000) {
+      console.log('🚨 Backend: Message too long');
       return new Response(
         JSON.stringify({ error: 'Message too long. Maximum 4000 characters.' }),
         {
@@ -121,32 +131,45 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
       );
     }
 
-    // Call the new AI API endpoint
-    console.log('🔍 Making AI service call:', {
+    // Prepare AI service request - EXACTLY like curl command
+    const aiServiceUrl = 'https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat';
+    const aiRequestBody = {
+      input: message,
+      model: '@cf/openai/gpt-oss-20b'
+    };
+
+    console.log('🔍 Backend: Making AI service call:', {
       domain: requestUrl.hostname,
-      url: 'https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat'
+      url: aiServiceUrl,
+      requestBody: aiRequestBody,
+      exactCurlMatch: 'YES - matches curl command exactly'
     });
     
-    const aiResponse = await fetch('https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat', {
+    console.log('🔍 Backend: AI request body JSON:', JSON.stringify(aiRequestBody));
+    
+    console.log('🔍 Backend: About to call fetch...');
+    const aiResponse = await fetch(aiServiceUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        input: message,
-        model: '@cf/openai/gpt-oss-20b'
-      }),
+      body: JSON.stringify(aiRequestBody),
     });
 
-    console.log('🔍 AI service response:', {
+    console.log('🔍 Backend: AI service response received:', {
       domain: requestUrl.hostname,
       status: aiResponse.status,
       statusText: aiResponse.statusText,
-      ok: aiResponse.ok
+      ok: aiResponse.ok,
+      headers: Object.fromEntries(aiResponse.headers.entries())
     });
 
     // Handle AI worker response
     if (!aiResponse.ok) {
+      console.log('🚨 Backend: AI service returned error');
+      const errorResponseText = await aiResponse.text();
+      console.log('🚨 Backend: AI error response body:', errorResponseText);
+      
       let errorMessage = 'AI service temporarily unavailable';
       
       if (aiResponse.status === 429) {
@@ -154,6 +177,8 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
       } else if (aiResponse.status >= 500) {
         errorMessage = 'AI service error. Please try again later.';
       }
+
+      console.log('🚨 Backend: Returning error to frontend:', errorMessage);
 
       return new Response(
         JSON.stringify({ error: errorMessage }),
@@ -168,24 +193,56 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
     }
 
     // Forward the AI response
+    console.log('🔍 Backend: AI service returned success, parsing JSON...');
     const aiData = await aiResponse.json();
+    console.log('🔍 Backend: AI response data:', JSON.stringify(aiData, null, 2));
     
     // Extract the actual text response from the complex structure
     let responseText = 'No response received';
+    console.log('🔍 Backend: Extracting response text...');
+    
     if (aiData.output && Array.isArray(aiData.output)) {
+      console.log('🔍 Backend: Found output array with', aiData.output.length, 'items');
       // Look for the assistant message in the output array
       const assistantMessage = aiData.output.find(item => 
         item.type === 'message' && item.role === 'assistant'
       );
+      console.log('🔍 Backend: Assistant message found:', !!assistantMessage);
+      
       if (assistantMessage && assistantMessage.content && Array.isArray(assistantMessage.content)) {
+        console.log('🔍 Backend: Assistant content array has', assistantMessage.content.length, 'items');
         const textContent = assistantMessage.content.find(content => content.type === 'output_text');
+        console.log('🔍 Backend: Text content found:', !!textContent);
+        
         if (textContent && textContent.text) {
           responseText = textContent.text;
+          console.log('🔍 Backend: Extracted response text:', responseText);
         }
+      }
+    } else {
+      console.log('🔍 Backend: No output array found, checking for other response formats...');
+      // Maybe the response format is different, let's check for common alternatives
+      if (aiData.response) {
+        responseText = aiData.response;
+        console.log('🔍 Backend: Found response in .response field:', responseText);
+      } else if (aiData.text) {
+        responseText = aiData.text;
+        console.log('🔍 Backend: Found response in .text field:', responseText);
+      } else if (aiData.message) {
+        responseText = aiData.message;
+        console.log('🔍 Backend: Found response in .message field:', responseText);
+      } else if (typeof aiData === 'string') {
+        responseText = aiData;
+        console.log('🔍 Backend: AI data is string:', responseText);
       }
     }
     
-    return new Response(JSON.stringify({ response: responseText }), {
+    console.log('🔍 Backend: Final response text to send:', responseText);
+    
+    const finalResponse = { response: responseText };
+    console.log('🔍 Backend: Final response object:', finalResponse);
+    
+    return new Response(JSON.stringify(finalResponse), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -194,7 +251,10 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
     });
 
   } catch (error) {
-    console.error('Chat request error:', error);
+    console.error('🚨 Backend: Chat request error caught:', error);
+    console.error('🚨 Backend: Error type:', typeof error);
+    console.error('🚨 Backend: Error message:', error.message);
+    console.error('🚨 Backend: Error stack:', error.stack);
     return new Response(
       JSON.stringify({ error: 'An unexpected error occurred' }),
       {

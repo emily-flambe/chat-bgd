@@ -130,25 +130,56 @@ export const staticAssets: Record<string, string> = {
     }
 
     async callAPI(message) {
-        const response = await fetch(this.apiEndpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message })
-        });
+        console.log('🔍 Frontend: Starting API call');
+        console.log('🔍 Frontend: API Endpoint:', this.apiEndpoint);
+        console.log('🔍 Frontend: Message:', message);
+        console.log('🔍 Frontend: Current URL:', window.location.href);
+        
+        const requestBody = { message };
+        console.log('🔍 Frontend: Request body:', JSON.stringify(requestBody));
+        
+        try {
+            console.log('🔍 Frontend: Making fetch request...');
+            const response = await fetch(this.apiEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
 
-        if (!response.ok) {
-            if (response.status === 429) {
-                throw new Error('Rate limit exceeded');
-            } else if (response.status >= 500) {
-                throw new Error('Service temporarily unavailable');
-            } else {
-                throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
+            console.log('🔍 Frontend: Fetch response received');
+            console.log('🔍 Frontend: Response status:', response.status);
+            console.log('🔍 Frontend: Response ok:', response.ok);
+            console.log('🔍 Frontend: Response headers:', Object.fromEntries(response.headers.entries()));
+
+            if (!response.ok) {
+                console.log('🚨 Frontend: Response not OK');
+                const responseText = await response.text();
+                console.log('🚨 Frontend: Error response body:', responseText);
+                
+                if (response.status === 429) {
+                    throw new Error('Rate limit exceeded');
+                } else if (response.status >= 500) {
+                    throw new Error('Service temporarily unavailable');
+                } else {
+                    throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
+                }
             }
-        }
 
-        return await response.json();
+            console.log('🔍 Frontend: Parsing JSON response...');
+            const jsonResponse = await response.json();
+            console.log('🔍 Frontend: Parsed response:', jsonResponse);
+            
+            return jsonResponse;
+            
+        } catch (fetchError) {
+            console.error('🚨 Frontend: Fetch error caught:', fetchError);
+            console.error('🚨 Frontend: Error type:', typeof fetchError);
+            console.error('🚨 Frontend: Error message:', fetchError.message);
+            console.error('🚨 Frontend: Error stack:', fetchError.stack);
+            throw fetchError;
+        }
     }
 
     addMessage(type, content) {
