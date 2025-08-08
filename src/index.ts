@@ -7,6 +7,7 @@ import { staticAssets } from './lib/static';
 
 export interface Env {
   CLOUDFLARE_AI_WORKER_API_TOKEN: string;
+  TEST_SECRET: string;
   ANALYTICS?: KVNamespace;
 }
 
@@ -14,6 +15,15 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+
+    // Debug: Check if we can access secrets on custom domain
+    if (request.url.includes('chat.emilycogsdill.com')) {
+      console.log('🔍 Custom Domain Debug:', {
+        domain: 'chat.emilycogsdill.com',
+        hasToken: !!env.CLOUDFLARE_AI_WORKER_API_TOKEN,
+        tokenExists: env.CLOUDFLARE_AI_WORKER_API_TOKEN ? 'YES' : 'NO'
+      });
+    }
 
     // Handle CORS preflight requests
     if (request.method === 'OPTIONS') {
