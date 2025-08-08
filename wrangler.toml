@@ -1,4 +1,34 @@
 name = "chat-bgd"
+
+routes = [
+  { pattern = "chat.emilycogsdill.com/*", zone_name = "emilycogsdill.com" }
+]
 main = "src/index.ts"
-compatibility_date = "2024-01-15"
+compatibility_date = "2024-12-30"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# Upload optimization
+upload_source_maps = false
+minify = true
+
+# Enable Wrangler logs (v4+)
+[observability.logs]
+enabled = true
+
+# Development configuration
+[dev]
+port = 8787
+local_protocol = "http"
+ip = "127.0.0.1"
+
+# Build configuration
+[build]
+command = "npm run build"
+cwd = "."
+watch_dir = ["src/static"]
+
+# Environment variables
+[vars]
+ENVIRONMENT = "production"
+API_VERSION = "v1"
