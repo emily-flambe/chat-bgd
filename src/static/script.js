@@ -178,7 +178,7 @@ class ChatBGD {
             
             this.messagesContainer.appendChild(containerDiv);
         } else {
-            // User messages and errors - no container, just regular message div
+            // User messages and errors - use regular message div with proper alignment
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
             messageDiv.textContent = content;

@@ -244,7 +244,7 @@ export const staticAssets: Record<string, string> = {
             
             this.messagesContainer.appendChild(containerDiv);
         } else {
-            // User messages and errors - no container, just regular message div
+            // User messages and errors - use regular message div with proper alignment
             const messageDiv = document.createElement('div');
             messageDiv.className = \`message \${type}\`;
             messageDiv.textContent = content;
@@ -451,6 +451,7 @@ body {
 }
 
 .message.user {
+    align-self: flex-end;
     background: #3b82f6;
     color: white;
     border-bottom-right-radius: 0.25rem;

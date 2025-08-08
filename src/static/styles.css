@@ -95,6 +95,7 @@ body {
 }
 
 .message.user {
+    align-self: flex-end;
     background: #3b82f6;
     color: white;
     border-bottom-right-radius: 0.25rem;
