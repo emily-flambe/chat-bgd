@@ -34,8 +34,21 @@ export default {
       try {
         console.log('🔍 Healthcheck: Testing AI service from backend...');
         
-        // Detect if we're running in local dev mode
-        const isLocalDev = url.hostname === '127.0.0.1' || url.hostname === 'localhost' || url.hostname.includes('localhost');
+        // Detect if we're running in local dev mode - check multiple indicators
+        const origin = request.headers.get('origin') || '';
+        const userAgent = request.headers.get('user-agent') || '';
+        const isLocalDev = url.port === '8787' || url.port === '8788' || 
+                          origin.includes('127.0.0.1') || origin.includes('localhost') ||
+                          url.hostname === '127.0.0.1' || url.hostname === 'localhost' ||
+                          request.url.includes('127.0.0.1') || request.url.includes(':8787') || request.url.includes(':8788');
+                          
+        console.log('🔍 Healthcheck: Environment detection:', {
+          'url.port': url.port,
+          'url.hostname': url.hostname,
+          'request.url': request.url,
+          origin,
+          isLocalDev
+        });
         
         let testResponse;
         
@@ -231,8 +244,20 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'
     });
     
-    // Detect environment and choose appropriate method
-    const isLocalDev = requestUrl.hostname === '127.0.0.1' || requestUrl.hostname === 'localhost' || requestUrl.hostname.includes('localhost');
+    // Detect environment and choose appropriate method - check multiple indicators
+    const origin = request.headers.get('origin') || '';
+    const isLocalDev = requestUrl.port === '8787' || requestUrl.port === '8788' || 
+                      origin.includes('127.0.0.1') || origin.includes('localhost') ||
+                      requestUrl.hostname === '127.0.0.1' || requestUrl.hostname === 'localhost' ||
+                      request.url.includes('127.0.0.1') || request.url.includes(':8787') || request.url.includes(':8788');
+                      
+    console.log('🔍 Backend: Environment detection:', {
+      'requestUrl.port': requestUrl.port,
+      'requestUrl.hostname': requestUrl.hostname,
+      'request.url': request.url,
+      origin,
+      isLocalDev
+    });
     
     let aiResponse;
     
