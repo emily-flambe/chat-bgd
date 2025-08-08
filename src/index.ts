@@ -7,6 +7,7 @@ import { staticAssets } from './lib/static';
 
 export interface Env {
   ANALYTICS?: KVNamespace;
+  AI_WORKER: Fetcher;
 }
 
 export default {
@@ -33,8 +34,8 @@ export default {
       try {
         console.log('🔍 Healthcheck: Testing AI service from backend...');
         
-        // Test with minimal request exactly like your working curl
-        const testResponse = await fetch('https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat', {
+        // Test with minimal request using service binding
+        const testRequest = new Request('https://fake-host/api/v1/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -43,6 +44,8 @@ export default {
             input: "healthcheck test"
           }),
         });
+        
+        const testResponse = await env.AI_WORKER.fetch(testRequest);
 
         console.log('🔍 Healthcheck: AI service response:', {
           status: testResponse.status,
@@ -208,18 +211,17 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'
     });
     
-    const aiResponse = await fetch(aiServiceUrl, {
+    // Use service binding instead of direct fetch to avoid same-zone restriction
+    const aiRequest = new Request('https://fake-host/api/v1/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': 'ChatBGD-Worker/1.0',
       },
       body: JSON.stringify(aiRequestBody),
-      cf: {
-        // Tell Cloudflare to bypass cache for this request
-        cacheEverything: false,
-      }
     });
+    
+    const aiResponse = await env.AI_WORKER.fetch(aiRequest);
 
     console.log('🔍 Backend: AI service response received:', {
       domain: requestUrl.hostname,
@@ -288,13 +290,27 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
           console.log('🔍 Backend: Extracted response text:', responseText);
         }
         
-        // Extract reasoning if present
-        const reasoningContent = assistantMessage.content.find(content => content.type === 'reasoning');
+        // Extract reasoning if present - check for reasoning_text type
+        const reasoningContent = assistantMessage.content.find(content => content.type === 'reasoning_text');
         console.log('🔍 Backend: Reasoning content found:', !!reasoningContent);
         
         if (reasoningContent && reasoningContent.text) {
           reasoningText = reasoningContent.text;
           console.log('🔍 Backend: Extracted reasoning text:', reasoningText);
+        }
+      }
+      
+      // Also check for separate reasoning objects in the output array
+      const reasoningObject = aiData.output.find(item => item.type === 'reasoning');
+      console.log('🔍 Backend: Reasoning object found:', !!reasoningObject);
+      
+      if (reasoningObject && reasoningObject.content && Array.isArray(reasoningObject.content)) {
+        const reasoningContent = reasoningObject.content.find(content => content.type === 'reasoning_text');
+        console.log('🔍 Backend: Reasoning text in object found:', !!reasoningContent);
+        
+        if (reasoningContent && reasoningContent.text) {
+          reasoningText = reasoningContent.text;
+          console.log('🔍 Backend: Extracted reasoning from separate object:', reasoningText);
         }
       }
     } else {

@@ -28,6 +28,11 @@ command = "npm run build"
 cwd = "."
 watch_dir = ["src/static"]
 
+# Service Bindings
+[[services]]
+binding = "AI_WORKER"
+service = "ai-worker"
+
 # Environment variables
 [vars]
 ENVIRONMENT = "production"
