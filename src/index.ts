@@ -34,18 +34,38 @@ export default {
       try {
         console.log('🔍 Healthcheck: Testing AI service from backend...');
         
-        // Test with minimal request using service binding
-        const testRequest = new Request('https://fake-host/api/v1/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            input: "healthcheck test"
-          }),
-        });
+        // Detect if we're running in local dev mode
+        const isLocalDev = url.hostname === '127.0.0.1' || url.hostname === 'localhost' || url.hostname.includes('localhost');
         
-        const testResponse = await env.AI_WORKER.fetch(testRequest);
+        let testResponse;
+        
+        if (isLocalDev) {
+          // In local dev, use direct fetch to external AI worker
+          console.log('🔍 Healthcheck: Using direct fetch (local dev mode)');
+          testResponse = await fetch('https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              input: "healthcheck test"
+            }),
+          });
+        } else {
+          // In production, use service binding
+          console.log('🔍 Healthcheck: Using service binding (production mode)');
+          const testRequest = new Request('https://fake-host/api/v1/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              input: "healthcheck test"
+            }),
+          });
+          
+          testResponse = await env.AI_WORKER.fetch(testRequest);
+        }
 
         console.log('🔍 Healthcheck: AI service response:', {
           status: testResponse.status,
@@ -211,17 +231,36 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'
     });
     
-    // Use service binding instead of direct fetch to avoid same-zone restriction
-    const aiRequest = new Request('https://fake-host/api/v1/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'ChatBGD-Worker/1.0',
-      },
-      body: JSON.stringify(aiRequestBody),
-    });
+    // Detect environment and choose appropriate method
+    const isLocalDev = requestUrl.hostname === '127.0.0.1' || requestUrl.hostname === 'localhost' || requestUrl.hostname.includes('localhost');
     
-    const aiResponse = await env.AI_WORKER.fetch(aiRequest);
+    let aiResponse;
+    
+    if (isLocalDev) {
+      // In local dev, use direct fetch to external AI worker
+      console.log('🔍 Backend: Using direct fetch (local dev mode)');
+      aiResponse = await fetch('https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'ChatBGD-Worker/1.0',
+        },
+        body: JSON.stringify(aiRequestBody),
+      });
+    } else {
+      // In production, use service binding to avoid same-zone restriction
+      console.log('🔍 Backend: Using service binding (production mode)');
+      const aiRequest = new Request('https://fake-host/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'ChatBGD-Worker/1.0',
+        },
+        body: JSON.stringify(aiRequestBody),
+      });
+      
+      aiResponse = await env.AI_WORKER.fetch(aiRequest);
+    }
 
     console.log('🔍 Backend: AI service response received:', {
       domain: requestUrl.hostname,
