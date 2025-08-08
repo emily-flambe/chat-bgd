@@ -220,28 +220,31 @@ export const staticAssets: Record<string, string> = {
             emptyState.remove();
         }
 
-        if (type === 'assistant' && reasoning) {
-            // Create message container with reasoning button
+        if (type === 'assistant') {
+            // Create message container with optional reasoning button
             const containerDiv = document.createElement('div');
             containerDiv.className = \`message-container \${type}\`;
             
             const messageDiv = document.createElement('div');
             messageDiv.className = \`message \${type}\`;
-            messageDiv.textContent = content;
-            
-            const reasoningButton = document.createElement('button');
-            reasoningButton.className = 'reasoning-button';
-            reasoningButton.textContent = '?';
-            reasoningButton.title = 'Show AI reasoning';
-            reasoningButton.addEventListener('click', () => {
-                this.showReasoningModal(reasoning);
-            });
+            messageDiv.innerHTML = this.renderMarkdown(content); // Use innerHTML for markdown
             
             containerDiv.appendChild(messageDiv);
-            containerDiv.appendChild(reasoningButton);
+            
+            if (reasoning) {
+                const reasoningButton = document.createElement('button');
+                reasoningButton.className = 'reasoning-button';
+                reasoningButton.textContent = '?';
+                reasoningButton.title = 'Show AI reasoning';
+                reasoningButton.addEventListener('click', () => {
+                    this.showReasoningModal(reasoning);
+                });
+                containerDiv.appendChild(reasoningButton);
+            }
+            
             this.messagesContainer.appendChild(containerDiv);
         } else {
-            // Regular message without reasoning
+            // User messages and errors - no container, just regular message div
             const messageDiv = document.createElement('div');
             messageDiv.className = \`message \${type}\`;
             messageDiv.textContent = content;
@@ -294,6 +297,56 @@ export const staticAssets: Record<string, string> = {
         this.reasoningModal.classList.remove('show');
         // Restore body scroll
         document.body.style.overflow = '';
+    }
+
+    renderMarkdown(text) {
+        // Basic markdown renderer - handles common elements
+        let html = text;
+        
+        // Escape HTML first, but preserve line breaks
+        html = html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        
+        // Bold **text** and __text__
+        html = html.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+        html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+        
+        // Italic *text* and _text_
+        html = html.replace(/(?<!\\*)\\*([^*\\n]+?)\\*(?!\\*)/g, '<em>$1</em>');
+        html = html.replace(/(?<!_)_([^_\\n]+?)_(?!_)/g, '<em>$1</em>');
+        
+        // Code \`text\`
+        html = html.replace(/\`([^\`]+?)\`/g, '<code>$1</code>');
+        
+        // Headers (# ## ###)
+        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+        
+        // Links [text](url)
+        html = html.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+        
+        // Line breaks (double newlines become paragraphs)
+        html = html.replace(/\\n\\n/g, '</p><p>');
+        html = '<p>' + html + '</p>';
+        
+        // Single line breaks
+        html = html.replace(/\\n/g, '<br>');
+        
+        // Clean up empty paragraphs
+        html = html.replace(/<p><\\/p>/g, '');
+        
+        // Lists - Basic unordered lists
+        html = html.replace(/^\\* (.+$)/gim, '<li>$1</li>');
+        html = html.replace(/^- (.+$)/gim, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\\/li>)/s, '<ul>$1</ul>');
+        
+        // Numbered lists
+        html = html.replace(/^\\d+\\. (.+$)/gim, '<li>$1</li>');
+        
+        // Code blocks \`\`\`
+        html = html.replace(/\`\`\`([^\`]*?)\`\`\`/gs, '<pre><code>$1</code></pre>');
+        
+        return html;
     }
 }
 
@@ -407,6 +460,95 @@ body {
     background: white;
     border: 1px solid #e2e8f0;
     border-bottom-left-radius: 0.25rem;
+}
+
+/* Markdown styles for assistant messages */
+.message.assistant h1,
+.message.assistant h2,
+.message.assistant h3 {
+    margin: 0.5rem 0;
+    font-weight: 600;
+}
+
+.message.assistant h1 {
+    font-size: 1.25rem;
+    color: #1e293b;
+}
+
+.message.assistant h2 {
+    font-size: 1.125rem;
+    color: #334155;
+}
+
+.message.assistant h3 {
+    font-size: 1rem;
+    color: #475569;
+}
+
+.message.assistant p {
+    margin: 0.5rem 0;
+}
+
+.message.assistant p:first-child {
+    margin-top: 0;
+}
+
+.message.assistant p:last-child {
+    margin-bottom: 0;
+}
+
+.message.assistant strong {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.message.assistant em {
+    font-style: italic;
+    color: #374151;
+}
+
+.message.assistant code {
+    background: #f1f5f9;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    font-size: 0.825rem;
+    color: #e11d48;
+}
+
+.message.assistant pre {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    overflow-x: auto;
+}
+
+.message.assistant pre code {
+    background: none;
+    padding: 0;
+    color: #374151;
+    font-size: 0.8rem;
+}
+
+.message.assistant ul,
+.message.assistant ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.message.assistant li {
+    margin: 0.25rem 0;
+}
+
+.message.assistant a {
+    color: #3b82f6;
+    text-decoration: underline;
+}
+
+.message.assistant a:hover {
+    color: #2563eb;
 }
 
 .message.error {

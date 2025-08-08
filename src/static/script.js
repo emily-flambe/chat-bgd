@@ -154,28 +154,31 @@ class ChatBGD {
             emptyState.remove();
         }
 
-        if (type === 'assistant' && reasoning) {
-            // Create message container with reasoning button
+        if (type === 'assistant') {
+            // Create message container with optional reasoning button
             const containerDiv = document.createElement('div');
             containerDiv.className = `message-container ${type}`;
             
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
-            messageDiv.textContent = content;
-            
-            const reasoningButton = document.createElement('button');
-            reasoningButton.className = 'reasoning-button';
-            reasoningButton.textContent = '?';
-            reasoningButton.title = 'Show AI reasoning';
-            reasoningButton.addEventListener('click', () => {
-                this.showReasoningModal(reasoning);
-            });
+            messageDiv.innerHTML = this.renderMarkdown(content); // Use innerHTML for markdown
             
             containerDiv.appendChild(messageDiv);
-            containerDiv.appendChild(reasoningButton);
+            
+            if (reasoning) {
+                const reasoningButton = document.createElement('button');
+                reasoningButton.className = 'reasoning-button';
+                reasoningButton.textContent = '?';
+                reasoningButton.title = 'Show AI reasoning';
+                reasoningButton.addEventListener('click', () => {
+                    this.showReasoningModal(reasoning);
+                });
+                containerDiv.appendChild(reasoningButton);
+            }
+            
             this.messagesContainer.appendChild(containerDiv);
         } else {
-            // Regular message without reasoning
+            // User messages and errors - no container, just regular message div
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
             messageDiv.textContent = content;
@@ -228,6 +231,56 @@ class ChatBGD {
         this.reasoningModal.classList.remove('show');
         // Restore body scroll
         document.body.style.overflow = '';
+    }
+
+    renderMarkdown(text) {
+        // Basic markdown renderer - handles common elements
+        let html = text;
+        
+        // Escape HTML first, but preserve line breaks
+        html = html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        
+        // Bold **text** and __text__
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+        
+        // Italic *text* and _text_
+        html = html.replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
+        html = html.replace(/(?<!_)_([^_\n]+?)_(?!_)/g, '<em>$1</em>');
+        
+        // Code `text`
+        html = html.replace(/`([^`]+?)`/g, '<code>$1</code>');
+        
+        // Headers (# ## ###)
+        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+        
+        // Links [text](url)
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+        
+        // Line breaks (double newlines become paragraphs)
+        html = html.replace(/\n\n/g, '</p><p>');
+        html = '<p>' + html + '</p>';
+        
+        // Single line breaks
+        html = html.replace(/\n/g, '<br>');
+        
+        // Clean up empty paragraphs
+        html = html.replace(/<p><\/p>/g, '');
+        
+        // Lists - Basic unordered lists
+        html = html.replace(/^\* (.+$)/gim, '<li>$1</li>');
+        html = html.replace(/^- (.+$)/gim, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+        
+        // Numbered lists
+        html = html.replace(/^\d+\. (.+$)/gim, '<li>$1</li>');
+        
+        // Code blocks ```
+        html = html.replace(/```([^`]*?)```/gs, '<pre><code>$1</code></pre>');
+        
+        return html;
     }
 }
 
