@@ -48,6 +48,19 @@ export const staticAssets: Record<string, string> = {
         <button class="send-button" id="sendButton" type="button">Send</button>
     </div>
 
+    <!-- Reasoning Modal -->
+    <div class="reasoning-modal" id="reasoningModal">
+        <div class="reasoning-modal-content">
+            <div class="reasoning-modal-header">
+                <h3>AI Reasoning</h3>
+                <button class="reasoning-modal-close" id="reasoningModalClose">&times;</button>
+            </div>
+            <div class="reasoning-modal-body" id="reasoningModalBody">
+                <!-- Reasoning content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
     <script src="/script.js"></script>
 </body>
 </html>`,
@@ -68,12 +81,30 @@ export const staticAssets: Record<string, string> = {
         this.sendButton = document.getElementById('sendButton');
         this.charCount = document.getElementById('charCount');
         this.loading = document.getElementById('loading');
+        this.reasoningModal = document.getElementById('reasoningModal');
+        this.reasoningModalClose = document.getElementById('reasoningModalClose');
+        this.reasoningModalBody = document.getElementById('reasoningModalBody');
     }
 
     bindEvents() {
         this.messageInput.addEventListener('input', () => this.handleMessageInput());
         this.messageInput.addEventListener('keydown', (e) => this.handleKeyDown(e));
         this.sendButton.addEventListener('click', () => this.sendMessage());
+        
+        // Modal events
+        this.reasoningModalClose.addEventListener('click', () => this.closeReasoningModal());
+        this.reasoningModal.addEventListener('click', (e) => {
+            if (e.target === this.reasoningModal) {
+                this.closeReasoningModal();
+            }
+        });
+        
+        // Escape key to close modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.reasoningModal.classList.contains('show')) {
+                this.closeReasoningModal();
+            }
+        });
     }
 
     handleMessageInput() {
@@ -119,7 +150,7 @@ export const staticAssets: Record<string, string> = {
             if (response.error) {
                 this.showError(response.error);
             } else {
-                this.addMessage('assistant', response.response);
+                this.addMessage('assistant', response.response, response.reasoning);
             }
         } catch (error) {
             console.error('Chat error:', error);
@@ -182,18 +213,41 @@ export const staticAssets: Record<string, string> = {
         }
     }
 
-    addMessage(type, content) {
+    addMessage(type, content, reasoning = null) {
         // Remove empty state if it exists
         const emptyState = this.messagesContainer.querySelector('.empty-state');
         if (emptyState) {
             emptyState.remove();
         }
 
-        const messageDiv = document.createElement('div');
-        messageDiv.className = \`message \${type}\`;
-        messageDiv.textContent = content;
+        if (type === 'assistant' && reasoning) {
+            // Create message container with reasoning button
+            const containerDiv = document.createElement('div');
+            containerDiv.className = \`message-container \${type}\`;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = \`message \${type}\`;
+            messageDiv.textContent = content;
+            
+            const reasoningButton = document.createElement('button');
+            reasoningButton.className = 'reasoning-button';
+            reasoningButton.textContent = '?';
+            reasoningButton.title = 'Show AI reasoning';
+            reasoningButton.addEventListener('click', () => {
+                this.showReasoningModal(reasoning);
+            });
+            
+            containerDiv.appendChild(messageDiv);
+            containerDiv.appendChild(reasoningButton);
+            this.messagesContainer.appendChild(containerDiv);
+        } else {
+            // Regular message without reasoning
+            const messageDiv = document.createElement('div');
+            messageDiv.className = \`message \${type}\`;
+            messageDiv.textContent = content;
+            this.messagesContainer.appendChild(messageDiv);
+        }
         
-        this.messagesContainer.appendChild(messageDiv);
         this.scrollToBottom();
     }
 
@@ -227,6 +281,19 @@ export const staticAssets: Record<string, string> = {
         } else {
             return error.message || 'An unexpected error occurred.';
         }
+    }
+
+    showReasoningModal(reasoning) {
+        this.reasoningModalBody.textContent = reasoning || 'No reasoning available';
+        this.reasoningModal.classList.add('show');
+        // Prevent body scroll when modal is open
+        document.body.style.overflow = 'hidden';
+    }
+
+    closeReasoningModal() {
+        this.reasoningModal.classList.remove('show');
+        // Restore body scroll
+        document.body.style.overflow = '';
     }
 }
 
@@ -311,17 +378,32 @@ body {
     border-radius: 1rem;
     white-space: pre-wrap;
     word-wrap: break-word;
+    position: relative;
+}
+
+.message-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    max-width: 80%;
+}
+
+.message-container.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.message-container.assistant {
+    align-self: flex-start;
 }
 
 .message.user {
-    align-self: flex-end;
     background: #3b82f6;
     color: white;
     border-bottom-right-radius: 0.25rem;
 }
 
 .message.assistant {
-    align-self: flex-start;
     background: white;
     border: 1px solid #e2e8f0;
     border-bottom-left-radius: 0.25rem;
@@ -446,6 +528,108 @@ body {
     color: #374151;
 }
 
+/* Reasoning Button */
+.reasoning-button {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: #64748b;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.reasoning-button:hover {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.reasoning-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Reasoning Modal */
+.reasoning-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
+.reasoning-modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.reasoning-modal-content {
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    max-width: 600px;
+    max-height: 80vh;
+    width: 90%;
+    margin: 2rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.reasoning-modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.reasoning-modal-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.reasoning-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #64748b;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.25rem;
+}
+
+.reasoning-modal-close:hover {
+    background: #f1f5f9;
+    color: #374151;
+}
+
+.reasoning-modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: #374151;
+    white-space: pre-wrap;
+}
+
 @media (max-width: 640px) {
     .header {
         flex-direction: column;
@@ -458,6 +642,21 @@ body {
 
     .message {
         max-width: 95%;
+    }
+
+    .message-container {
+        max-width: 95%;
+    }
+
+    .reasoning-modal-content {
+        margin: 1rem;
+        width: calc(100% - 2rem);
+        max-height: 90vh;
+    }
+
+    .reasoning-modal-header,
+    .reasoning-modal-body {
+        padding: 1rem;
     }
 }`
 };

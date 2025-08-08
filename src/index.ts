@@ -28,6 +28,61 @@ export default {
       });
     }
 
+    // Health check endpoint that tests AI service from backend
+    if (path === '/healthcheck' && request.method === 'GET') {
+      try {
+        console.log('🔍 Healthcheck: Testing AI service from backend...');
+        
+        // Test with minimal request exactly like your working curl
+        const testResponse = await fetch('https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            input: "healthcheck test"
+          }),
+        });
+
+        console.log('🔍 Healthcheck: AI service response:', {
+          status: testResponse.status,
+          ok: testResponse.ok,
+          headers: Object.fromEntries(testResponse.headers.entries())
+        });
+
+        const responseText = await testResponse.text();
+        console.log('🔍 Healthcheck: AI response body:', responseText);
+
+        return new Response(JSON.stringify({
+          aiServiceStatus: testResponse.ok ? 'HEALTHY' : 'ERROR',
+          aiServiceStatusCode: testResponse.status,
+          aiResponseBody: responseText,
+          timestamp: new Date().toISOString(),
+          backendCanReachAI: true
+        }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        });
+
+      } catch (error) {
+        console.error('🚨 Healthcheck: Failed to reach AI service:', error);
+        return new Response(JSON.stringify({
+          aiServiceStatus: 'UNREACHABLE',
+          error: error.message,
+          timestamp: new Date().toISOString(),
+          backendCanReachAI: false
+        }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        });
+      }
+    }
+
     // Handle CORS preflight requests
     if (request.method === 'OPTIONS') {
       return new Response(null, {
@@ -131,13 +186,10 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
       );
     }
 
-    // Prepare AI service request - EXACTLY like curl command
+    // Prepare AI service request - EXACTLY like working curl command
     const aiServiceUrl = 'https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat';
     const aiRequestBody = {
-      input: message,
-      model: '@cf/openai/gpt-oss-20b',
-      instructions: "You are a helpful AI assistant.",
-      reasoning: { effort: "high" }
+      input: message
     };
 
     console.log('🔍 Backend: Making AI service call:', {
@@ -150,12 +202,23 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
     console.log('🔍 Backend: AI request body JSON:', JSON.stringify(aiRequestBody));
     
     console.log('🔍 Backend: About to call fetch...');
+    console.log('🔍 Backend: Worker environment check:', {
+      isWorker: typeof WorkerGlobalScope !== 'undefined',
+      hasCloudflare: typeof cf !== 'undefined',
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'
+    });
+    
     const aiResponse = await fetch(aiServiceUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'ChatBGD-Worker/1.0',
       },
       body: JSON.stringify(aiRequestBody),
+      cf: {
+        // Tell Cloudflare to bypass cache for this request
+        cacheEverything: false,
+      }
     });
 
     console.log('🔍 Backend: AI service response received:', {
@@ -199,12 +262,14 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
     const aiData = await aiResponse.json();
     console.log('🔍 Backend: AI response data:', JSON.stringify(aiData, null, 2));
     
-    // Extract the actual text response from the complex structure
+    // Extract both the text response and reasoning from the complex structure
     let responseText = 'No response received';
-    console.log('🔍 Backend: Extracting response text...');
+    let reasoningText = null;
+    console.log('🔍 Backend: Extracting response text and reasoning...');
     
     if (aiData.output && Array.isArray(aiData.output)) {
       console.log('🔍 Backend: Found output array with', aiData.output.length, 'items');
+      
       // Look for the assistant message in the output array
       const assistantMessage = aiData.output.find(item => 
         item.type === 'message' && item.role === 'assistant'
@@ -213,12 +278,23 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
       
       if (assistantMessage && assistantMessage.content && Array.isArray(assistantMessage.content)) {
         console.log('🔍 Backend: Assistant content array has', assistantMessage.content.length, 'items');
+        
+        // Extract the main text response
         const textContent = assistantMessage.content.find(content => content.type === 'output_text');
         console.log('🔍 Backend: Text content found:', !!textContent);
         
         if (textContent && textContent.text) {
           responseText = textContent.text;
           console.log('🔍 Backend: Extracted response text:', responseText);
+        }
+        
+        // Extract reasoning if present
+        const reasoningContent = assistantMessage.content.find(content => content.type === 'reasoning');
+        console.log('🔍 Backend: Reasoning content found:', !!reasoningContent);
+        
+        if (reasoningContent && reasoningContent.text) {
+          reasoningText = reasoningContent.text;
+          console.log('🔍 Backend: Extracted reasoning text:', reasoningText);
         }
       }
     } else {
@@ -237,11 +313,21 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
         responseText = aiData;
         console.log('🔍 Backend: AI data is string:', responseText);
       }
+      
+      // Check for reasoning in alternate locations
+      if (aiData.reasoning) {
+        reasoningText = typeof aiData.reasoning === 'string' ? aiData.reasoning : JSON.stringify(aiData.reasoning, null, 2);
+        console.log('🔍 Backend: Found reasoning in .reasoning field:', reasoningText);
+      }
     }
     
     console.log('🔍 Backend: Final response text to send:', responseText);
+    console.log('🔍 Backend: Final reasoning text to send:', reasoningText);
     
-    const finalResponse = { response: responseText };
+    const finalResponse = { 
+      response: responseText,
+      reasoning: reasoningText
+    };
     console.log('🔍 Backend: Final response object:', finalResponse);
     
     return new Response(JSON.stringify(finalResponse), {

@@ -15,12 +15,30 @@ class ChatBGD {
         this.sendButton = document.getElementById('sendButton');
         this.charCount = document.getElementById('charCount');
         this.loading = document.getElementById('loading');
+        this.reasoningModal = document.getElementById('reasoningModal');
+        this.reasoningModalClose = document.getElementById('reasoningModalClose');
+        this.reasoningModalBody = document.getElementById('reasoningModalBody');
     }
 
     bindEvents() {
         this.messageInput.addEventListener('input', () => this.handleMessageInput());
         this.messageInput.addEventListener('keydown', (e) => this.handleKeyDown(e));
         this.sendButton.addEventListener('click', () => this.sendMessage());
+        
+        // Modal events
+        this.reasoningModalClose.addEventListener('click', () => this.closeReasoningModal());
+        this.reasoningModal.addEventListener('click', (e) => {
+            if (e.target === this.reasoningModal) {
+                this.closeReasoningModal();
+            }
+        });
+        
+        // Escape key to close modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.reasoningModal.classList.contains('show')) {
+                this.closeReasoningModal();
+            }
+        });
     }
 
     handleMessageInput() {
@@ -66,7 +84,7 @@ class ChatBGD {
             if (response.error) {
                 this.showError(response.error);
             } else {
-                this.addMessage('assistant', response.response);
+                this.addMessage('assistant', response.response, response.reasoning);
             }
         } catch (error) {
             console.error('Chat error:', error);
@@ -129,18 +147,41 @@ class ChatBGD {
         }
     }
 
-    addMessage(type, content) {
+    addMessage(type, content, reasoning = null) {
         // Remove empty state if it exists
         const emptyState = this.messagesContainer.querySelector('.empty-state');
         if (emptyState) {
             emptyState.remove();
         }
 
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${type}`;
-        messageDiv.textContent = content;
+        if (type === 'assistant' && reasoning) {
+            // Create message container with reasoning button
+            const containerDiv = document.createElement('div');
+            containerDiv.className = `message-container ${type}`;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = content;
+            
+            const reasoningButton = document.createElement('button');
+            reasoningButton.className = 'reasoning-button';
+            reasoningButton.textContent = '?';
+            reasoningButton.title = 'Show AI reasoning';
+            reasoningButton.addEventListener('click', () => {
+                this.showReasoningModal(reasoning);
+            });
+            
+            containerDiv.appendChild(messageDiv);
+            containerDiv.appendChild(reasoningButton);
+            this.messagesContainer.appendChild(containerDiv);
+        } else {
+            // Regular message without reasoning
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = content;
+            this.messagesContainer.appendChild(messageDiv);
+        }
         
-        this.messagesContainer.appendChild(messageDiv);
         this.scrollToBottom();
     }
 
@@ -174,6 +215,19 @@ class ChatBGD {
         } else {
             return error.message || 'An unexpected error occurred.';
         }
+    }
+
+    showReasoningModal(reasoning) {
+        this.reasoningModalBody.textContent = reasoning || 'No reasoning available';
+        this.reasoningModal.classList.add('show');
+        // Prevent body scroll when modal is open
+        document.body.style.overflow = 'hidden';
+    }
+
+    closeReasoningModal() {
+        this.reasoningModal.classList.remove('show');
+        // Restore body scroll
+        document.body.style.overflow = '';
     }
 }
 
