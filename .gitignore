@@ -1,0 +1,16 @@
+# Environment variables
+.dev.vars
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.wrangler/
+
+# Generated files
+src/lib/static.ts
+
+# Development
+.DS_Store
+*.log

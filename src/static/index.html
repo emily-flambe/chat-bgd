@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatBGD - AI Chat Interface</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>ChatBGD</h1>
+        <div class="status-section">
+            <div class="status-indicator connected" id="statusIndicator" title="Ready to chat"></div>
+            <span class="status-text">Ready</span>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            <div class="empty-state">
+                <h2>Welcome to ChatBGD</h2>
+                <p>Start chatting with AI below</p>
+            </div>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <span>AI is thinking...</span>
+        </div>
+    </div>
+
+    <div class="input-section">
+        <div class="input-area">
+            <textarea 
+                class="message-input" 
+                id="messageInput" 
+                placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+                rows="1"
+            ></textarea>
+            <div class="char-count" id="charCount">0 / 4000</div>
+        </div>
+        <button class="send-button" id="sendButton" type="button">Send</button>
+    </div>
+
+    <script src="/script.js"></script>
+</body>
+</html>
