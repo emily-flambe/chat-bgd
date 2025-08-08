@@ -135,7 +135,9 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
     const aiServiceUrl = 'https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat';
     const aiRequestBody = {
       input: message,
-      model: '@cf/openai/gpt-oss-20b'
+      model: '@cf/openai/gpt-oss-20b',
+      instructions: "You are a helpful AI assistant.",
+      reasoning: { effort: "high" }
     };
 
     console.log('🔍 Backend: Making AI service call:', {
