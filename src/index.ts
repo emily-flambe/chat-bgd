@@ -186,8 +186,10 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
     const body = await request.json();
     console.log('🔍 Backend: Parsed request body:', body);
     
-    const { message } = body;
+    const { message, instructions, reasoningLevel } = body;
     console.log('🔍 Backend: Extracted message:', message);
+    console.log('🔍 Backend: Extracted instructions:', instructions);
+    console.log('🔍 Backend: Extracted reasoningLevel:', reasoningLevel);
 
     // Validate the message
     if (!message || typeof message !== 'string') {
@@ -220,9 +222,19 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
 
     // Prepare AI service request - EXACTLY like working curl command
     const aiServiceUrl = 'https://ai-worker.emily-cogsdill.workers.dev/api/v1/chat';
-    const aiRequestBody = {
+    const aiRequestBody: any = {
       input: message
     };
+
+    // Add instructions if provided
+    if (instructions && instructions.trim()) {
+      aiRequestBody.instructions = instructions.trim();
+    }
+
+    // Add reasoning if enabled
+    if (reasoningLevel) {
+      aiRequestBody.reasoning = { effort: reasoningLevel };
+    }
 
     console.log('🔍 Backend: Making AI service call:', {
       domain: requestUrl.hostname,

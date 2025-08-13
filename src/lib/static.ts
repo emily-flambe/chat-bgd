@@ -36,16 +36,57 @@ export const staticAssets: Record<string, string> = {
     </div>
 
     <div class="input-section">
-        <div class="input-area">
-            <textarea 
-                class="message-input" 
-                id="messageInput" 
-                placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
-                rows="1"
-            ></textarea>
-            <div class="char-count" id="charCount">0 / 4000</div>
+        <!-- Instructions Section -->
+        <div class="instructions-section">
+            <button class="instructions-toggle" id="instructionsToggle" type="button">
+                <span class="toggle-icon">▶</span>
+                Instructions (Optional)
+            </button>
+            <div class="instructions-content" id="instructionsContent">
+                <textarea 
+                    class="instructions-input" 
+                    id="instructionsInput" 
+                    placeholder="Enter system instructions for the AI (e.g., role, tone, constraints)..."
+                    rows="2"
+                ></textarea>
+                <div class="instructions-char-count" id="instructionsCharCount">0 / 1000</div>
+            </div>
         </div>
-        <button class="send-button" id="sendButton" type="button">Send</button>
+
+        <!-- Reasoning Section -->
+        <div class="reasoning-section">
+            <label class="reasoning-label">
+                <input type="checkbox" id="reasoningEnabled" class="reasoning-checkbox">
+                Enable AI Reasoning
+            </label>
+            <div class="reasoning-options" id="reasoningOptions">
+                <label class="reasoning-option">
+                    <input type="radio" name="reasoningLevel" value="low" class="reasoning-radio">
+                    Low
+                </label>
+                <label class="reasoning-option">
+                    <input type="radio" name="reasoningLevel" value="medium" class="reasoning-radio" checked>
+                    Medium
+                </label>
+                <label class="reasoning-option">
+                    <input type="radio" name="reasoningLevel" value="high" class="reasoning-radio">
+                    High
+                </label>
+            </div>
+        </div>
+
+        <div class="input-area-wrapper">
+            <div class="input-area">
+                <textarea 
+                    class="message-input" 
+                    id="messageInput" 
+                    placeholder="Type your message... (Enter to send, Shift+Enter for new line)"
+                    rows="1"
+                ></textarea>
+                <div class="char-count" id="charCount">0 / 4000</div>
+            </div>
+            <button class="send-button" id="sendButton" type="button">Send</button>
+        </div>
     </div>
 
     <!-- Reasoning Modal -->
@@ -84,12 +125,27 @@ export const staticAssets: Record<string, string> = {
         this.reasoningModal = document.getElementById('reasoningModal');
         this.reasoningModalClose = document.getElementById('reasoningModalClose');
         this.reasoningModalBody = document.getElementById('reasoningModalBody');
+        
+        // New elements
+        this.instructionsToggle = document.getElementById('instructionsToggle');
+        this.instructionsContent = document.getElementById('instructionsContent');
+        this.instructionsInput = document.getElementById('instructionsInput');
+        this.instructionsCharCount = document.getElementById('instructionsCharCount');
+        this.reasoningEnabled = document.getElementById('reasoningEnabled');
+        this.reasoningOptions = document.getElementById('reasoningOptions');
     }
 
     bindEvents() {
         this.messageInput.addEventListener('input', () => this.handleMessageInput());
         this.messageInput.addEventListener('keydown', (e) => this.handleKeyDown(e));
         this.sendButton.addEventListener('click', () => this.sendMessage());
+        
+        // Instructions events
+        this.instructionsToggle.addEventListener('click', () => this.toggleInstructions());
+        this.instructionsInput.addEventListener('input', () => this.handleInstructionsInput());
+        
+        // Reasoning events
+        this.reasoningEnabled.addEventListener('change', () => this.toggleReasoningOptions());
         
         // Modal events
         this.reasoningModalClose.addEventListener('click', () => this.closeReasoningModal());
@@ -123,6 +179,43 @@ export const staticAssets: Record<string, string> = {
         textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
     }
 
+    toggleInstructions() {
+        const isExpanded = this.instructionsContent.classList.contains('expanded');
+        
+        if (isExpanded) {
+            this.instructionsContent.classList.remove('expanded');
+            this.instructionsToggle.classList.remove('expanded');
+        } else {
+            this.instructionsContent.classList.add('expanded');
+            this.instructionsToggle.classList.add('expanded');
+            // Focus the instructions input when expanded
+            setTimeout(() => this.instructionsInput.focus(), 100);
+        }
+    }
+
+    handleInstructionsInput() {
+        const instructions = this.instructionsInput.value;
+        const charCount = instructions.length;
+        
+        this.instructionsCharCount.textContent = \`\${charCount} / 1000\`;
+        this.instructionsCharCount.style.color = charCount > 1000 ? '#dc2626' : '#6b7280';
+        
+        // Auto-resize instructions textarea
+        const textarea = this.instructionsInput;
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 80) + 'px';
+    }
+
+    toggleReasoningOptions() {
+        const isEnabled = this.reasoningEnabled.checked;
+        
+        if (isEnabled) {
+            this.reasoningOptions.classList.add('show');
+        } else {
+            this.reasoningOptions.classList.remove('show');
+        }
+    }
+
     handleKeyDown(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -132,12 +225,23 @@ export const staticAssets: Record<string, string> = {
 
     async sendMessage() {
         const message = this.messageInput.value.trim();
+        const instructions = this.instructionsInput.value.trim();
         
         if (!message) return;
         if (message.length > 4000) {
             this.showError('Message too long. Maximum 4000 characters.');
             return;
         }
+        if (instructions.length > 1000) {
+            this.showError('Instructions too long. Maximum 1000 characters.');
+            return;
+        }
+
+        // Get reasoning settings
+        const reasoningEnabled = this.reasoningEnabled.checked;
+        const reasoningLevel = reasoningEnabled ? 
+            document.querySelector('input[name="reasoningLevel"]:checked')?.value || 'medium' : 
+            null;
 
         // Clear input and show user message
         this.messageInput.value = '';
@@ -146,7 +250,7 @@ export const staticAssets: Record<string, string> = {
         this.setLoading(true);
 
         try {
-            const response = await this.callAPI(message);
+            const response = await this.callAPI(message, instructions, reasoningLevel);
             if (response.error) {
                 this.showError(response.error);
             } else {
@@ -160,13 +264,19 @@ export const staticAssets: Record<string, string> = {
         }
     }
 
-    async callAPI(message) {
+    async callAPI(message, instructions = '', reasoningLevel = null) {
         console.log('🔍 Frontend: Starting API call');
         console.log('🔍 Frontend: API Endpoint:', this.apiEndpoint);
         console.log('🔍 Frontend: Message:', message);
+        console.log('🔍 Frontend: Instructions:', instructions);
+        console.log('🔍 Frontend: Reasoning Level:', reasoningLevel);
         console.log('🔍 Frontend: Current URL:', window.location.href);
         
-        const requestBody = { message };
+        const requestBody = { 
+            message,
+            instructions: instructions || undefined,
+            reasoningLevel: reasoningLevel || undefined
+        };
         console.log('🔍 Frontend: Request body:', JSON.stringify(requestBody));
         
         try {
@@ -426,7 +536,7 @@ body {
 }
 
 .message {
-    max-width: 80%;
+    max-width: min(600px, 80vw);
     padding: 0.75rem 1rem;
     border-radius: 1rem;
     white-space: pre-wrap;
@@ -438,7 +548,7 @@ body {
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    max-width: 80%;
+    max-width: min(600px, 80vw);
 }
 
 .message-container.user {
@@ -563,6 +673,138 @@ body {
     background: white;
     border-top: 1px solid #e2e8f0;
     padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Instructions Section */
+.instructions-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.instructions-toggle {
+    background: none;
+    border: none;
+    padding: 0.5rem 0;
+    font-size: 0.875rem;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: left;
+    transition: color 0.2s ease;
+}
+
+.instructions-toggle:hover {
+    color: #374151;
+}
+
+.toggle-icon {
+    transition: transform 0.2s ease;
+    font-size: 0.75rem;
+}
+
+.instructions-toggle.expanded .toggle-icon {
+    transform: rotate(90deg);
+}
+
+.instructions-content {
+    display: none;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.instructions-content.expanded {
+    display: flex;
+}
+
+.instructions-input {
+    min-height: 2.5rem;
+    max-height: 80px;
+    padding: 0.625rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    resize: none;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    background: #f8fafc;
+}
+
+.instructions-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 1px #3b82f6;
+    background: white;
+}
+
+.instructions-char-count {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-align: right;
+}
+
+/* Reasoning Section */
+.reasoning-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+}
+
+.reasoning-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    cursor: pointer;
+}
+
+.reasoning-checkbox {
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+.reasoning-options {
+    display: none;
+    flex-direction: row;
+    gap: 1rem;
+    margin-top: 0.25rem;
+    padding-left: 1.5rem;
+}
+
+.reasoning-options.show {
+    display: flex;
+}
+
+.reasoning-option {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.reasoning-radio {
+    width: 0.875rem;
+    height: 0.875rem;
+    cursor: pointer;
+}
+
+/* Input Area Wrapper */
+.input-area-wrapper {
     display: flex;
     gap: 0.75rem;
     align-items: flex-end;
@@ -784,11 +1026,11 @@ body {
     }
 
     .message {
-        max-width: 95%;
+        max-width: min(95vw, 500px);
     }
 
     .message-container {
-        max-width: 95%;
+        max-width: min(95vw, 500px);
     }
 
     .reasoning-modal-content {

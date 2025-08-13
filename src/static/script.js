@@ -18,12 +18,27 @@ class ChatBGD {
         this.reasoningModal = document.getElementById('reasoningModal');
         this.reasoningModalClose = document.getElementById('reasoningModalClose');
         this.reasoningModalBody = document.getElementById('reasoningModalBody');
+        
+        // New elements
+        this.instructionsToggle = document.getElementById('instructionsToggle');
+        this.instructionsContent = document.getElementById('instructionsContent');
+        this.instructionsInput = document.getElementById('instructionsInput');
+        this.instructionsCharCount = document.getElementById('instructionsCharCount');
+        this.reasoningEnabled = document.getElementById('reasoningEnabled');
+        this.reasoningOptions = document.getElementById('reasoningOptions');
     }
 
     bindEvents() {
         this.messageInput.addEventListener('input', () => this.handleMessageInput());
         this.messageInput.addEventListener('keydown', (e) => this.handleKeyDown(e));
         this.sendButton.addEventListener('click', () => this.sendMessage());
+        
+        // Instructions events
+        this.instructionsToggle.addEventListener('click', () => this.toggleInstructions());
+        this.instructionsInput.addEventListener('input', () => this.handleInstructionsInput());
+        
+        // Reasoning events
+        this.reasoningEnabled.addEventListener('change', () => this.toggleReasoningOptions());
         
         // Modal events
         this.reasoningModalClose.addEventListener('click', () => this.closeReasoningModal());
@@ -57,6 +72,43 @@ class ChatBGD {
         textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
     }
 
+    toggleInstructions() {
+        const isExpanded = this.instructionsContent.classList.contains('expanded');
+        
+        if (isExpanded) {
+            this.instructionsContent.classList.remove('expanded');
+            this.instructionsToggle.classList.remove('expanded');
+        } else {
+            this.instructionsContent.classList.add('expanded');
+            this.instructionsToggle.classList.add('expanded');
+            // Focus the instructions input when expanded
+            setTimeout(() => this.instructionsInput.focus(), 100);
+        }
+    }
+
+    handleInstructionsInput() {
+        const instructions = this.instructionsInput.value;
+        const charCount = instructions.length;
+        
+        this.instructionsCharCount.textContent = `${charCount} / 1000`;
+        this.instructionsCharCount.style.color = charCount > 1000 ? '#dc2626' : '#6b7280';
+        
+        // Auto-resize instructions textarea
+        const textarea = this.instructionsInput;
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 80) + 'px';
+    }
+
+    toggleReasoningOptions() {
+        const isEnabled = this.reasoningEnabled.checked;
+        
+        if (isEnabled) {
+            this.reasoningOptions.classList.add('show');
+        } else {
+            this.reasoningOptions.classList.remove('show');
+        }
+    }
+
     handleKeyDown(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -66,12 +118,23 @@ class ChatBGD {
 
     async sendMessage() {
         const message = this.messageInput.value.trim();
+        const instructions = this.instructionsInput.value.trim();
         
         if (!message) return;
         if (message.length > 4000) {
             this.showError('Message too long. Maximum 4000 characters.');
             return;
         }
+        if (instructions.length > 1000) {
+            this.showError('Instructions too long. Maximum 1000 characters.');
+            return;
+        }
+
+        // Get reasoning settings
+        const reasoningEnabled = this.reasoningEnabled.checked;
+        const reasoningLevel = reasoningEnabled ? 
+            document.querySelector('input[name="reasoningLevel"]:checked')?.value || 'medium' : 
+            null;
 
         // Clear input and show user message
         this.messageInput.value = '';
@@ -80,7 +143,7 @@ class ChatBGD {
         this.setLoading(true);
 
         try {
-            const response = await this.callAPI(message);
+            const response = await this.callAPI(message, instructions, reasoningLevel);
             if (response.error) {
                 this.showError(response.error);
             } else {
@@ -94,13 +157,19 @@ class ChatBGD {
         }
     }
 
-    async callAPI(message) {
+    async callAPI(message, instructions = '', reasoningLevel = null) {
         console.log('🔍 Frontend: Starting API call');
         console.log('🔍 Frontend: API Endpoint:', this.apiEndpoint);
         console.log('🔍 Frontend: Message:', message);
+        console.log('🔍 Frontend: Instructions:', instructions);
+        console.log('🔍 Frontend: Reasoning Level:', reasoningLevel);
         console.log('🔍 Frontend: Current URL:', window.location.href);
         
-        const requestBody = { message };
+        const requestBody = { 
+            message,
+            instructions: instructions || undefined,
+            reasoningLevel: reasoningLevel || undefined
+        };
         console.log('🔍 Frontend: Request body:', JSON.stringify(requestBody));
         
         try {

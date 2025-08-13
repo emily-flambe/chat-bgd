@@ -70,7 +70,7 @@ body {
 }
 
 .message {
-    max-width: 80%;
+    max-width: min(600px, 80vw);
     padding: 0.75rem 1rem;
     border-radius: 1rem;
     white-space: pre-wrap;
@@ -82,7 +82,7 @@ body {
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    max-width: 80%;
+    max-width: min(600px, 80vw);
 }
 
 .message-container.user {
@@ -207,6 +207,138 @@ body {
     background: white;
     border-top: 1px solid #e2e8f0;
     padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Instructions Section */
+.instructions-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.instructions-toggle {
+    background: none;
+    border: none;
+    padding: 0.5rem 0;
+    font-size: 0.875rem;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-align: left;
+    transition: color 0.2s ease;
+}
+
+.instructions-toggle:hover {
+    color: #374151;
+}
+
+.toggle-icon {
+    transition: transform 0.2s ease;
+    font-size: 0.75rem;
+}
+
+.instructions-toggle.expanded .toggle-icon {
+    transform: rotate(90deg);
+}
+
+.instructions-content {
+    display: none;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.instructions-content.expanded {
+    display: flex;
+}
+
+.instructions-input {
+    min-height: 2.5rem;
+    max-height: 80px;
+    padding: 0.625rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    resize: none;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    background: #f8fafc;
+}
+
+.instructions-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 1px #3b82f6;
+    background: white;
+}
+
+.instructions-char-count {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-align: right;
+}
+
+/* Reasoning Section */
+.reasoning-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+}
+
+.reasoning-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #374151;
+    cursor: pointer;
+}
+
+.reasoning-checkbox {
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+.reasoning-options {
+    display: none;
+    flex-direction: row;
+    gap: 1rem;
+    margin-top: 0.25rem;
+    padding-left: 1.5rem;
+}
+
+.reasoning-options.show {
+    display: flex;
+}
+
+.reasoning-option {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: #64748b;
+    cursor: pointer;
+}
+
+.reasoning-radio {
+    width: 0.875rem;
+    height: 0.875rem;
+    cursor: pointer;
+}
+
+/* Input Area Wrapper */
+.input-area-wrapper {
     display: flex;
     gap: 0.75rem;
     align-items: flex-end;
@@ -428,11 +560,11 @@ body {
     }
 
     .message {
-        max-width: 95%;
+        max-width: min(95vw, 500px);
     }
 
     .message-container {
-        max-width: 95%;
+        max-width: min(95vw, 500px);
     }
 
     .reasoning-modal-content {
