@@ -1,0 +1,108 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "chat-bgd",
+    "displayName": "ChatBGD",
+    "type": "web-application",
+    "language": "typescript",
+    "framework": "cloudflare-workers",
+    "frontend": "vanilla-js"
+  },
+  "ai": {
+    "contextFiles": [
+      ".project/config.md",
+      ".project/contexts/*.md"
+    ],
+    "personas": {
+      "builder": { "emoji": "🔨", "focus": "architecture, features, worker implementation" },
+      "guardian": { "emoji": "🛡️", "focus": "security, performance, accessibility" },
+      "guide": { "emoji": "📖", "focus": "documentation, troubleshooting" }
+    },
+    "model": {
+      "temperature": 0.7,
+      "maxTokens": 4096
+    }
+  },
+  "environments": {
+    "development": {
+      "worker": "chat-bgd",
+      "domain": "localhost:8787",
+      "backend": "ai-worker (via service binding)"
+    },
+    "production": {
+      "worker": "chat-bgd",
+      "domain": "chat.emilycogsdill.com",
+      "backend": "ai-worker (via service binding)"
+    }
+  },
+  "formatting": {
+    "indentSize": 2,
+    "lineWidth": 80,
+    "useTabs": false,
+    "quoteStyle": "single",
+    "semicolons": true,
+    "trailingComma": "es5"
+  },
+  "testing": {
+    "framework": "manual",
+    "coverage": {
+      "target": "manual-verification",
+      "areas": ["api-endpoints", "frontend-functionality", "accessibility"]
+    },
+    "endpoints": {
+      "healthcheck": "/healthcheck",
+      "debug": "/debug",
+      "chat": "/api/chat"
+    }
+  },
+  "security": {
+    "authentication": "server-side-token",
+    "tokenSecret": "CLOUDFLARE_AI_WORKER_API_TOKEN",
+    "cors": {
+      "origins": "*",
+      "methods": ["GET", "POST", "OPTIONS"],
+      "headers": ["Content-Type"]
+    },
+    "inputValidation": {
+      "messageMaxLength": 4000,
+      "sanitization": true
+    }
+  },
+  "performance": {
+    "staticAssets": "embedded",
+    "bundleOptimization": true,
+    "coldStart": "minimal-dependencies",
+    "caching": "cloudflare-cdn"
+  },
+  "tools": {
+    "mcp": {
+      "servers": []
+    },
+    "extensions": [
+      "bradlc.vscode-tailwindcss",
+      "esbenp.prettier-vscode"
+    ]
+  },
+  "commands": {
+    "dev": "npm run build && wrangler dev",
+    "build": "node build-static.js",
+    "deploy": "npm run build && wrangler deploy",
+    "logs": "wrangler tail",
+    "test": "npm run build && npm run dev"
+  },
+  "serviceBindings": {
+    "AI_WORKER": {
+      "service": "ai-worker",
+      "description": "Backend AI service for chat processing"
+    }
+  },
+  "buildSystem": {
+    "staticAssetEmbedding": {
+      "inputDir": "src/static",
+      "outputFile": "src/lib/static.ts",
+      "buildScript": "build-static.js"
+    },
+    "watchFiles": ["src/static/**/*"],
+    "buildOnChange": true
+  }
+}

@@ -36,6 +36,12 @@ export const staticAssets: Record<string, string> = {
     </div>
 
     <div class="input-section">
+        <!-- Usage Info Section -->
+        <div class="usage-info">
+            <span id="context-char-count">0k / 400k characters</span>
+            <button id="new-conversation" class="new-conversation-btn" style="display:none;">New Conversation</button>
+        </div>
+        
         <!-- Instructions Section -->
         <div class="instructions-section">
             <button class="instructions-toggle" id="instructionsToggle" type="button">
@@ -109,10 +115,13 @@ export const staticAssets: Record<string, string> = {
     constructor() {
         this.apiEndpoint = '/api/chat';
         this.messages = [];
+        this.conversationHistory = [];
+        this.maxChars = 400000;
         
         this.initializeElements();
         this.bindEvents();
         this.autoResizeTextarea();
+        this.updateUsage();
     }
 
     initializeElements() {
@@ -133,6 +142,9 @@ export const staticAssets: Record<string, string> = {
         this.instructionsCharCount = document.getElementById('instructionsCharCount');
         this.reasoningEnabled = document.getElementById('reasoningEnabled');
         this.reasoningOptions = document.getElementById('reasoningOptions');
+        
+        // Context elements
+        this.newConversationBtn = document.getElementById('new-conversation');
     }
 
     bindEvents() {
@@ -146,6 +158,11 @@ export const staticAssets: Record<string, string> = {
         
         // Reasoning events
         this.reasoningEnabled.addEventListener('change', () => this.toggleReasoningOptions());
+        
+        // New conversation button
+        if (this.newConversationBtn) {
+            this.newConversationBtn.addEventListener('click', () => this.startNewConversation());
+        }
         
         // Modal events
         this.reasoningModalClose.addEventListener('click', () => this.closeReasoningModal());
@@ -246,15 +263,30 @@ export const staticAssets: Record<string, string> = {
         // Clear input and show user message
         this.messageInput.value = '';
         this.handleMessageInput();
+        
+        // Add to conversation history
+        this.conversationHistory.push({role: 'user', content: message});
+        
         this.addMessage('user', message);
+        this.updateUsage();
         this.setLoading(true);
 
         try {
+            const requestData = { 
+                message,
+                instructions: instructions || undefined,
+                reasoningLevel: reasoningLevel || undefined,
+                conversationHistory: this.conversationHistory.length > 0 ? this.conversationHistory : undefined
+            };
+            
             const response = await this.callAPI(message, instructions, reasoningLevel);
             if (response.error) {
                 this.showError(response.error);
             } else {
-                this.addMessage('assistant', response.response, response.reasoning);
+                // Add assistant response to conversation history
+                this.conversationHistory.push({role: 'assistant', content: response.response});
+                this.addMessage('assistant', response.response, response.reasoning, requestData);
+                this.updateUsage();
             }
         } catch (error) {
             console.error('Chat error:', error);
@@ -275,7 +307,8 @@ export const staticAssets: Record<string, string> = {
         const requestBody = { 
             message,
             instructions: instructions || undefined,
-            reasoningLevel: reasoningLevel || undefined
+            reasoningLevel: reasoningLevel || undefined,
+            conversationHistory: this.conversationHistory.length > 0 ? this.conversationHistory : undefined
         };
         console.log('🔍 Frontend: Request body:', JSON.stringify(requestBody));
         
@@ -323,7 +356,7 @@ export const staticAssets: Record<string, string> = {
         }
     }
 
-    addMessage(type, content, reasoning = null) {
+    addMessage(type, content, reasoning = null, requestData = null) {
         // Remove empty state if it exists
         const emptyState = this.messagesContainer.querySelector('.empty-state');
         if (emptyState) {
@@ -347,10 +380,11 @@ export const staticAssets: Record<string, string> = {
                 reasoningButton.textContent = '?';
                 reasoningButton.title = 'Show AI reasoning';
                 reasoningButton.addEventListener('click', () => {
-                    this.showReasoningModal(reasoning);
+                    this.showReasoningModal(reasoning, requestData);
                 });
                 containerDiv.appendChild(reasoningButton);
             }
+            
             
             this.messagesContainer.appendChild(containerDiv);
         } else {
@@ -396,17 +430,128 @@ export const staticAssets: Record<string, string> = {
         }
     }
 
-    showReasoningModal(reasoning) {
-        this.reasoningModalBody.textContent = reasoning || 'No reasoning available';
+    showReasoningModal(reasoning, requestData) {
+        // Create the modal content with reasoning and expandable curl
+        let modalContent = \`<div class="reasoning-content">\${reasoning || 'No reasoning available'}</div>\`;
+        
+        if (requestData) {
+            const curlCommand = \`curl -X POST \${window.location.origin}/api/chat \\\\
+  -H "Content-Type: application/json" \\\\
+  -d '\${JSON.stringify(requestData, null, 2)}'\`;
+            
+            modalContent += \`
+                <div class="curl-section">
+                    <button class="curl-toggle" onclick="this.parentElement.classList.toggle('expanded')">
+                        <span class="toggle-arrow">▶</span> Show API Request
+                    </button>
+                    <div class="curl-content">
+                        <pre>\${this.escapeHtml(curlCommand)}</pre>
+                    </div>
+                </div>\`;
+        }
+        
+        this.reasoningModalBody.innerHTML = modalContent;
+        const modalHeader = this.reasoningModal.querySelector('.reasoning-modal-header h3');
+        modalHeader.textContent = 'AI Reasoning';
+        
         this.reasoningModal.classList.add('show');
         // Prevent body scroll when modal is open
         document.body.style.overflow = 'hidden';
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     closeReasoningModal() {
         this.reasoningModal.classList.remove('show');
         // Restore body scroll
         document.body.style.overflow = '';
+    }
+    
+    showRequestModal(requestData) {
+        // Create curl command representation
+        const curlCommand = \`curl -X POST \${window.location.origin}/api/chat \\\\
+  -H "Content-Type: application/json" \\\\
+  -d '\${JSON.stringify(requestData, null, 2)}'\`;
+        
+        // Show the request data in a modal (reuse reasoning modal structure)
+        const modalBody = document.getElementById('reasoningModalBody');
+        const modalHeader = this.reasoningModal.querySelector('.reasoning-modal-header h3');
+        
+        modalHeader.textContent = 'Full API Request';
+        modalBody.innerHTML = \`<pre style="white-space: pre-wrap; word-wrap: break-word;">\${curlCommand}</pre>\`;
+        
+        this.reasoningModal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    updateUsage() {
+        // More accurate calculation: include full JSON structure
+        const chars = this.conversationHistory.length > 0 ? JSON.stringify(this.conversationHistory).length : 0;
+        const charCountElement = document.getElementById('context-char-count');
+        const newConversationBtn = document.getElementById('new-conversation');
+        
+        if (charCountElement) {
+            charCountElement.textContent = \`\${Math.round(chars/1000)}k / 400k characters\`;
+            
+            // Update color based on usage level
+            const percentage = (chars / this.maxChars) * 100;
+            if (percentage >= 90) {
+                charCountElement.style.color = '#dc2626'; // red
+                const remaining = Math.round(100 - percentage);
+                this.showWarning(\`Context limit approaching! You have \${remaining}% capacity remaining.\`);
+                newConversationBtn.style.display = 'inline-block';
+            } else if (percentage >= 70) {
+                charCountElement.style.color = '#f59e0b'; // orange
+            } else {
+                charCountElement.style.color = '#10b981'; // green
+            }
+            
+            // Disable input if at limit
+            if (chars >= this.maxChars) {
+                this.disableInput();
+            }
+        }
+    }
+    
+    showWarning(message) {
+        // Show a warning message at the top of the chat
+        const existingWarning = document.querySelector('.context-warning');
+        if (!existingWarning) {
+            const warning = document.createElement('div');
+            warning.className = 'context-warning';
+            warning.textContent = message;
+            this.messagesContainer.appendChild(warning);
+            this.scrollToBottom();
+        }
+    }
+    
+    disableInput() {
+        this.messageInput.disabled = true;
+        this.messageInput.placeholder = 'Context limit reached. Please start a new conversation.';
+        this.sendButton.disabled = true;
+        this.showError('Context limit reached. Please start a new conversation to continue.');
+    }
+    
+    startNewConversation() {
+        this.conversationHistory = [];
+        this.messages = [];
+        this.messagesContainer.innerHTML = '<div class="empty-state">No messages yet. Start a conversation!</div>';
+        this.messageInput.disabled = false;
+        this.messageInput.placeholder = 'Type your message... (Enter to send, Shift+Enter for new line)';
+        this.sendButton.disabled = false;
+        document.getElementById('new-conversation').style.display = 'none';
+        
+        // Clear any existing warnings
+        const existingWarning = document.querySelector('.context-warning');
+        if (existingWarning) {
+            existingWarning.remove();
+        }
+        
+        this.updateUsage();
     }
 
     renderMarkdown(text) {
@@ -940,6 +1085,30 @@ body {
     cursor: not-allowed;
 }
 
+/* Request Button */
+.request-button {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 4px;
+    color: #64748b;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.request-button:hover {
+    background: #e2e8f0;
+    color: #475569;
+}
+
 /* Reasoning Modal */
 .reasoning-modal {
     display: none;
@@ -1012,7 +1181,66 @@ body {
     font-size: 0.875rem;
     line-height: 1.6;
     color: #374151;
+}
+
+.reasoning-content {
     white-space: pre-wrap;
+    margin-bottom: 1rem;
+}
+
+.curl-section {
+    border-top: 1px solid #e2e8f0;
+    margin-top: 1rem;
+    padding-top: 1rem;
+}
+
+.curl-toggle {
+    background: none;
+    border: none;
+    color: #3b82f6;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    padding: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: color 0.2s;
+}
+
+.curl-toggle:hover {
+    color: #2563eb;
+}
+
+.toggle-arrow {
+    display: inline-block;
+    transition: transform 0.2s;
+}
+
+.curl-section.expanded .toggle-arrow {
+    transform: rotate(90deg);
+}
+
+.curl-content {
+    display: none;
+    margin-top: 0.5rem;
+}
+
+.curl-section.expanded .curl-content {
+    display: block;
+}
+
+.curl-content pre {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    overflow-x: auto;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: #1e293b;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 @media (max-width: 640px) {
@@ -1043,6 +1271,50 @@ body {
     .reasoning-modal-body {
         padding: 1rem;
     }
+}
+
+/* Usage Info Styles */
+.usage-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    font-size: 0.875rem;
+}
+
+#context-char-count {
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.new-conversation-btn {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.new-conversation-btn:hover {
+    background: #2563eb;
+}
+
+/* Context Warning Styles */
+.context-warning {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin: 0.5rem 0;
+    text-align: center;
+    border: 1px solid #fcd34d;
 }`
 };
 
