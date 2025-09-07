@@ -376,7 +376,8 @@ class ChatBGD {
     }
 
     updateUsage() {
-        const chars = this.conversationHistory.map(m => m.content).join('').length;
+        // More accurate calculation: include full JSON structure
+        const chars = this.conversationHistory.length > 0 ? JSON.stringify(this.conversationHistory).length : 0;
         const charCountElement = document.getElementById('context-char-count');
         const newConversationBtn = document.getElementById('new-conversation');
         
@@ -387,7 +388,8 @@ class ChatBGD {
             const percentage = (chars / this.maxChars) * 100;
             if (percentage >= 90) {
                 charCountElement.style.color = '#dc2626'; // red
-                this.showWarning('Context limit approaching! You have less than 10% capacity remaining.');
+                const remaining = Math.round(100 - percentage);
+                this.showWarning(`Context limit approaching! You have ${remaining}% capacity remaining.`);
                 newConversationBtn.style.display = 'inline-block';
             } else if (percentage >= 70) {
                 charCountElement.style.color = '#f59e0b'; // orange
@@ -426,9 +428,16 @@ class ChatBGD {
         this.messages = [];
         this.messagesContainer.innerHTML = '<div class="empty-state">No messages yet. Start a conversation!</div>';
         this.messageInput.disabled = false;
-        this.messageInput.placeholder = 'Type your message here...';
+        this.messageInput.placeholder = 'Type your message... (Enter to send, Shift+Enter for new line)';
         this.sendButton.disabled = false;
         document.getElementById('new-conversation').style.display = 'none';
+        
+        // Clear any existing warnings
+        const existingWarning = document.querySelector('.context-warning');
+        if (existingWarning) {
+            existingWarning.remove();
+        }
+        
         this.updateUsage();
     }
 
