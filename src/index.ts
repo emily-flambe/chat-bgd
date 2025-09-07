@@ -186,10 +186,11 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
     const body = await request.json();
     console.log('🔍 Backend: Parsed request body:', body);
     
-    const { message, instructions, reasoningLevel } = body;
+    const { message, instructions, reasoningLevel, conversationHistory } = body;
     console.log('🔍 Backend: Extracted message:', message);
     console.log('🔍 Backend: Extracted instructions:', instructions);
     console.log('🔍 Backend: Extracted reasoningLevel:', reasoningLevel);
+    console.log('🔍 Backend: Extracted conversationHistory:', conversationHistory ? `${conversationHistory.length} messages` : 'none');
 
     // Validate the message
     if (!message || typeof message !== 'string') {
@@ -234,6 +235,11 @@ async function handleChatRequest(request: Request, env: Env): Promise<Response> 
     // Add reasoning if enabled
     if (reasoningLevel) {
       aiRequestBody.reasoning = { effort: reasoningLevel };
+    }
+
+    // Add conversation history if provided
+    if (conversationHistory && Array.isArray(conversationHistory)) {
+      aiRequestBody.conversationHistory = conversationHistory;
     }
 
     console.log('🔍 Backend: Making AI service call:', {

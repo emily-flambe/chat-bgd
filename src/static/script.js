@@ -2,10 +2,13 @@ class ChatBGD {
     constructor() {
         this.apiEndpoint = '/api/chat';
         this.messages = [];
+        this.conversationHistory = [];
+        this.maxChars = 400000;
         
         this.initializeElements();
         this.bindEvents();
         this.autoResizeTextarea();
+        this.updateUsage();
     }
 
     initializeElements() {
@@ -26,6 +29,9 @@ class ChatBGD {
         this.instructionsCharCount = document.getElementById('instructionsCharCount');
         this.reasoningEnabled = document.getElementById('reasoningEnabled');
         this.reasoningOptions = document.getElementById('reasoningOptions');
+        
+        // Context elements
+        this.newConversationBtn = document.getElementById('new-conversation');
     }
 
     bindEvents() {
@@ -39,6 +45,11 @@ class ChatBGD {
         
         // Reasoning events
         this.reasoningEnabled.addEventListener('change', () => this.toggleReasoningOptions());
+        
+        // New conversation button
+        if (this.newConversationBtn) {
+            this.newConversationBtn.addEventListener('click', () => this.startNewConversation());
+        }
         
         // Modal events
         this.reasoningModalClose.addEventListener('click', () => this.closeReasoningModal());
@@ -139,15 +150,30 @@ class ChatBGD {
         // Clear input and show user message
         this.messageInput.value = '';
         this.handleMessageInput();
+        
+        // Add to conversation history
+        this.conversationHistory.push({role: 'user', content: message});
+        
         this.addMessage('user', message);
+        this.updateUsage();
         this.setLoading(true);
 
         try {
+            const requestData = { 
+                message,
+                instructions: instructions || undefined,
+                reasoningLevel: reasoningLevel || undefined,
+                conversationHistory: this.conversationHistory.length > 0 ? this.conversationHistory : undefined
+            };
+            
             const response = await this.callAPI(message, instructions, reasoningLevel);
             if (response.error) {
                 this.showError(response.error);
             } else {
-                this.addMessage('assistant', response.response, response.reasoning);
+                // Add assistant response to conversation history
+                this.conversationHistory.push({role: 'assistant', content: response.response});
+                this.addMessage('assistant', response.response, response.reasoning, requestData);
+                this.updateUsage();
             }
         } catch (error) {
             console.error('Chat error:', error);
@@ -168,7 +194,8 @@ class ChatBGD {
         const requestBody = { 
             message,
             instructions: instructions || undefined,
-            reasoningLevel: reasoningLevel || undefined
+            reasoningLevel: reasoningLevel || undefined,
+            conversationHistory: this.conversationHistory.length > 0 ? this.conversationHistory : undefined
         };
         console.log('🔍 Frontend: Request body:', JSON.stringify(requestBody));
         
@@ -216,7 +243,7 @@ class ChatBGD {
         }
     }
 
-    addMessage(type, content, reasoning = null) {
+    addMessage(type, content, reasoning = null, requestData = null) {
         // Remove empty state if it exists
         const emptyState = this.messagesContainer.querySelector('.empty-state');
         if (emptyState) {
@@ -240,10 +267,11 @@ class ChatBGD {
                 reasoningButton.textContent = '?';
                 reasoningButton.title = 'Show AI reasoning';
                 reasoningButton.addEventListener('click', () => {
-                    this.showReasoningModal(reasoning);
+                    this.showReasoningModal(reasoning, requestData);
                 });
                 containerDiv.appendChild(reasoningButton);
             }
+            
             
             this.messagesContainer.appendChild(containerDiv);
         } else {
@@ -289,17 +317,119 @@ class ChatBGD {
         }
     }
 
-    showReasoningModal(reasoning) {
-        this.reasoningModalBody.textContent = reasoning || 'No reasoning available';
+    showReasoningModal(reasoning, requestData) {
+        // Create the modal content with reasoning and expandable curl
+        let modalContent = `<div class="reasoning-content">${reasoning || 'No reasoning available'}</div>`;
+        
+        if (requestData) {
+            const curlCommand = `curl -X POST ${window.location.origin}/api/chat \\
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify(requestData, null, 2)}'`;
+            
+            modalContent += `
+                <div class="curl-section">
+                    <button class="curl-toggle" onclick="this.parentElement.classList.toggle('expanded')">
+                        <span class="toggle-arrow">▶</span> Show API Request
+                    </button>
+                    <div class="curl-content">
+                        <pre>${this.escapeHtml(curlCommand)}</pre>
+                    </div>
+                </div>`;
+        }
+        
+        this.reasoningModalBody.innerHTML = modalContent;
+        const modalHeader = this.reasoningModal.querySelector('.reasoning-modal-header h3');
+        modalHeader.textContent = 'AI Reasoning';
+        
         this.reasoningModal.classList.add('show');
         // Prevent body scroll when modal is open
         document.body.style.overflow = 'hidden';
+    }
+    
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     closeReasoningModal() {
         this.reasoningModal.classList.remove('show');
         // Restore body scroll
         document.body.style.overflow = '';
+    }
+    
+    showRequestModal(requestData) {
+        // Create curl command representation
+        const curlCommand = `curl -X POST ${window.location.origin}/api/chat \\
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify(requestData, null, 2)}'`;
+        
+        // Show the request data in a modal (reuse reasoning modal structure)
+        const modalBody = document.getElementById('reasoningModalBody');
+        const modalHeader = this.reasoningModal.querySelector('.reasoning-modal-header h3');
+        
+        modalHeader.textContent = 'Full API Request';
+        modalBody.innerHTML = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${curlCommand}</pre>`;
+        
+        this.reasoningModal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    updateUsage() {
+        const chars = this.conversationHistory.map(m => m.content).join('').length;
+        const charCountElement = document.getElementById('context-char-count');
+        const newConversationBtn = document.getElementById('new-conversation');
+        
+        if (charCountElement) {
+            charCountElement.textContent = `${Math.round(chars/1000)}k / 400k characters`;
+            
+            // Update color based on usage level
+            const percentage = (chars / this.maxChars) * 100;
+            if (percentage >= 90) {
+                charCountElement.style.color = '#dc2626'; // red
+                this.showWarning('Context limit approaching! You have less than 10% capacity remaining.');
+                newConversationBtn.style.display = 'inline-block';
+            } else if (percentage >= 70) {
+                charCountElement.style.color = '#f59e0b'; // orange
+            } else {
+                charCountElement.style.color = '#10b981'; // green
+            }
+            
+            // Disable input if at limit
+            if (chars >= this.maxChars) {
+                this.disableInput();
+            }
+        }
+    }
+    
+    showWarning(message) {
+        // Show a warning message at the top of the chat
+        const existingWarning = document.querySelector('.context-warning');
+        if (!existingWarning) {
+            const warning = document.createElement('div');
+            warning.className = 'context-warning';
+            warning.textContent = message;
+            this.messagesContainer.appendChild(warning);
+            this.scrollToBottom();
+        }
+    }
+    
+    disableInput() {
+        this.messageInput.disabled = true;
+        this.messageInput.placeholder = 'Context limit reached. Please start a new conversation.';
+        this.sendButton.disabled = true;
+        this.showError('Context limit reached. Please start a new conversation to continue.');
+    }
+    
+    startNewConversation() {
+        this.conversationHistory = [];
+        this.messages = [];
+        this.messagesContainer.innerHTML = '<div class="empty-state">No messages yet. Start a conversation!</div>';
+        this.messageInput.disabled = false;
+        this.messageInput.placeholder = 'Type your message here...';
+        this.sendButton.disabled = false;
+        document.getElementById('new-conversation').style.display = 'none';
+        this.updateUsage();
     }
 
     renderMarkdown(text) {
